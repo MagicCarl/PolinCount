@@ -1,0 +1,146 @@
+import { fetchPollenData, getDangerZoneLevel, getCachedPollenData } from './src/pollenService.js';
+import { pollenData as fallbackData } from './src/pollenData.js';
+
+function renderApp(pollenData, isRefreshing = false) {
+    const reportDateEl = document.getElementById('report-date');
+    const pollenContainer = document.getElementById('pollen-container');
+    const dangerBadgeContainer = document.getElementById('danger-badge-container');
+    const dangerDescription = document.getElementById('danger-description');
+    const predominantEl = document.getElementById('predominant-types');
+    const lastUpdatedEl = document.getElementById('last-updated');
+
+    // Set Header Data
+    reportDateEl.textContent = `Report Period: ${pollenData.period}`;
+    lastUpdatedEl.innerHTML = `
+        ${isRefreshing ? '<span class="refresh-spinner">Refreshing...</span> ' : ''}
+        App Last Updated: ${pollenData.lastUpdated}
+    `;
+
+    // Danger Zone Badge
+    const dangerInfo = getDangerZoneLevel(pollenData.pollen);
+    dangerBadgeContainer.innerHTML = `
+        <div class="danger-zone-badge ${dangerInfo.class}">
+            ${dangerInfo.label} ZONE
+        </div>
+    `;
+    dangerDescription.textContent = dangerInfo.description;
+
+    // Render Pollen Cards
+    pollenContainer.innerHTML = pollenData.pollen.map(p => {
+        const percentage = Math.min((p.severityLevel / 4) * 100, 100);
+        let barColor = 'var(--color-safe)';
+        if (p.severityLevel === 2) barColor = 'var(--color-moderate)';
+        if (p.severityLevel === 3) barColor = 'var(--color-caution)';
+        if (p.severityLevel === 4) barColor = 'var(--color-danger)';
+
+        return `
+            <div class="glass-panel pollen-card ${isRefreshing ? 'updating' : ''}">
+                <div class="pollen-type">${p.type}</div>
+                <div class="pollen-value">
+                    ${p.count} <span class="pollen-unit">${p.unit}</span>
+                </div>
+                <div class="severity-label" style="color: ${barColor}">${p.severity}</div>
+                <div class="severity-indicator">
+                    <div class="severity-progress" style="width: ${percentage}%; background-color: ${barColor}"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Predominant Types
+    const treePollen = pollenData.pollen.find(p => p.type === 'Trees');
+    if (treePollen && treePollen.details && treePollen.details.length > 0) {
+        predominantEl.innerHTML = `
+            <strong style="color: var(--text-secondary)">Predominant Tree Species:</strong>
+            <p style="margin-top: 0.5rem; color: var(--text-primary)">
+                ${treePollen.details.join(', ')}
+            </p>
+        `;
+    } else {
+        predominantEl.innerHTML = '';
+    }
+}
+
+function showError(container, message) {
+    container.innerHTML = `
+        <div class="glass-panel" style="grid-column: 1/-1; text-align: center; border-color: var(--color-danger); color: var(--color-danger);">
+            <p>${message}</p>
+            <button onclick="window.__retryLoad()" style="
+                margin-top: 1rem; padding: 0.6rem 1.5rem; border: 1px solid var(--color-danger);
+                background: rgba(239,68,68,0.15); color: var(--color-danger); border-radius: 12px;
+                cursor: pointer; font-family: var(--font-main); font-weight: 600; font-size: 0.9rem;
+            ">Retry</button>
+        </div>
+    `;
+}
+
+/**
+ * Get the best available data: fresh > cached > fallback
+ */
+async function loadPollenData() {
+    try {
+        return await fetchPollenData();
+    } catch (fetchError) {
+        console.warn('Live fetch failed:', fetchError);
+
+        // Try cache (even if stale)
+        const cached = getCachedPollenData();
+        if (cached) {
+            console.log('Using cached data as fallback');
+            return cached.data;
+        }
+
+        // Ultimate fallback: hardcoded sample data
+        console.log('Using hardcoded fallback data');
+        return { ...fallbackData, lastUpdated: new Date().toLocaleString() };
+    }
+}
+
+async function initApp() {
+    const cached = getCachedPollenData();
+    const pollenContainer = document.getElementById('pollen-container');
+
+    if (cached) {
+        // Immediately render cached data while refreshing
+        renderApp(cached.data, true);
+
+        // Refresh in background
+        try {
+            const freshData = await fetchPollenData();
+            renderApp(freshData, false);
+        } catch (error) {
+            console.warn('Background refresh failed, keeping cached data:', error);
+            renderApp(cached.data, false);
+        }
+    } else {
+        // No cache — show loading, fetch data
+        pollenContainer.innerHTML = '<div class="glass-panel" style="grid-column: 1/-1; text-align: center;">Opening Pollen Sampler...</div>';
+
+        const data = await loadPollenData();
+        renderApp(data, false);
+    }
+}
+
+// Expose retry for the error button
+window.__retryLoad = async function () {
+    const pollenContainer = document.getElementById('pollen-container');
+    pollenContainer.innerHTML = '<div class="glass-panel" style="grid-column: 1/-1; text-align: center;">Retrying...</div>';
+
+    const data = await loadPollenData();
+    renderApp(data, false);
+};
+
+// Auto-refresh when user returns to the tab
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        const cached = getCachedPollenData();
+        if (!cached || cached.isStale) {
+            // Data is stale or missing — refresh silently
+            fetchPollenData()
+                .then(freshData => renderApp(freshData, false))
+                .catch(() => {}); // fail silently, current display stays
+        }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', initApp);

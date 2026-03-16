@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NC Pollen Tracker | Danger Zone</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div id="danger-badge-container"></div>
+            <h1>NC Pollen Tracker</h1>
+            <p class="subtitle" id="report-date"></p>
+        </header>
+
+        <main class="pollen-grid" id="pollen-container">
+            <!-- Cards will be injected here -->
+        </main>
+
+        <section class="glass-panel" id="danger-info">
+            <h2>Current Situation</h2>
+            <p id="danger-description"></p>
+            <div id="predominant-types" style="margin-top: 1rem;"></div>
+        </section>
+
+        <footer>
+            <p>Data provided by NC DEQ Division of Air Quality (Raleigh Sampler)</p>
+            <p id="last-updated"></p>
+        </footer>
+    </div>
+    <script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+:root {
+  --bg-color: #0f172a;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  
+  --color-safe: #22c55e;
+  --color-moderate: #eab308;
+  --color-caution: #f97316;
+  --color-danger: #ef4444;
+  
+  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-main);
+  background-color: var(--bg-color);
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(30, 41, 59, 1) 0%, transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(15, 23, 42, 1) 0%, transparent 40%);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+#app {
+  width: 100%;
+  max-width: 1000px;
+  padding: 2rem;
+  z-index: 1;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  padding: 2.5rem;
+  margin-bottom: 2rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+h1 {
+  font-size: 3.5rem;
+  font-weight: 800;
+  background: linear-gradient(to right, #60a5fa, #a855f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.05em;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+}
+
+/* Danger Zone Indicator */
+.danger-zone-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 1.5rem;
+  animation: pulse 2s infinite;
+}
+
+.danger-zone-badge.danger { background: rgba(239, 68, 68, 0.2); color: var(--color-danger); border: 1px solid var(--color-danger); }
+.danger-zone-badge.caution { background: rgba(249, 115, 22, 0.2); color: var(--color-caution); border: 1px solid var(--color-caution); }
+.danger-zone-badge.moderate { background: rgba(234, 179, 8, 0.2); color: var(--color-moderate); border: 1px solid var(--color-moderate); }
+.danger-zone-badge.safe { background: rgba(34, 197, 94, 0.2); color: var(--color-safe); border: 1px solid var(--color-safe); }
+
+/* Grid Layout */
+.pollen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.pollen-card {
+  padding: 2rem;
+  transition: transform 0.3s ease, background 0.3s ease;
+  cursor: default;
+  animation: fadeIn 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pollen-card:hover {
+  transform: translateY(-5px);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pollen-type {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.pollen-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.pollen-unit {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.severity-indicator {
+  height: 6px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  margin: 1.5rem 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.severity-progress {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1s ease-out;
+}
+
+.severity-label {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+/* Animations */
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.8; }
+}
+
+.refresh-spinner {
+  font-size: 0.75rem;
+  color: var(--color-moderate);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  margin-right: 0.5rem;
+  animation: breathe 2s infinite ease-in-out;
+}
+
+.pollen-card.updating {
+  opacity: 0.7;
+  filter: grayscale(0.5);
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+footer {
+  text-align: center;
+  margin-top: 3rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  h1 { font-size: 2.5rem; }
+  .pollen-grid { grid-template-columns: 1fr; }
+}
