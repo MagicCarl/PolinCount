@@ -1,5 +1,6 @@
 import { fetchPollenData, getDangerZoneLevel, getCachedPollenData } from './src/pollenService.js';
 import { pollenData as fallbackData } from './src/pollenData.js';
+import { CITIES, fetchAQI, getAQILevel } from './src/aqiService.js';
 
 function renderApp(pollenData, isRefreshing = false) {
     const reportDateEl = document.getElementById('report-date');
@@ -143,4 +144,93 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-document.addEventListener('DOMContentLoaded', initApp);
+// --- AQI Section ---
+
+function populateCityPicker() {
+    const select = document.getElementById('city-select');
+    CITIES.forEach((city, i) => {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${city.name}, ${city.state}`;
+        select.appendChild(option);
+    });
+
+    // Restore last selected city
+    const saved = localStorage.getItem('aqi_selected_city');
+    if (saved !== null && saved < CITIES.length) {
+        select.value = saved;
+    }
+
+    select.addEventListener('change', () => {
+        localStorage.setItem('aqi_selected_city', select.value);
+        loadAQIForCity(CITIES[select.value]);
+    });
+}
+
+function renderAQI(data) {
+    const container = document.getElementById('aqi-container');
+    const level = getAQILevel(data.aqi);
+
+    container.innerHTML = `
+        <div class="glass-panel aqi-card">
+            <div class="aqi-header">
+                <div class="aqi-city">${data.city}, ${data.state}</div>
+                <div class="aqi-badge" style="background: ${level.color}20; color: ${level.color}; border: 1px solid ${level.color};">
+                    ${level.label}
+                </div>
+            </div>
+            <div class="aqi-value" style="color: ${level.color}">
+                ${data.aqi}
+                <span class="aqi-unit">US AQI</span>
+            </div>
+            <p class="aqi-description">${level.description}</p>
+            <div class="aqi-pollutants">
+                <div class="pollutant">
+                    <span class="pollutant-label">PM2.5</span>
+                    <span class="pollutant-value">${data.pm25} <small>μg/m³</small></span>
+                </div>
+                <div class="pollutant">
+                    <span class="pollutant-label">PM10</span>
+                    <span class="pollutant-value">${data.pm10} <small>μg/m³</small></span>
+                </div>
+                <div class="pollutant">
+                    <span class="pollutant-label">NO₂</span>
+                    <span class="pollutant-value">${data.no2} <small>μg/m³</small></span>
+                </div>
+                <div class="pollutant">
+                    <span class="pollutant-label">O₃</span>
+                    <span class="pollutant-value">${data.ozone} <small>μg/m³</small></span>
+                </div>
+            </div>
+            <div class="aqi-time">Updated: ${data.time}</div>
+        </div>
+    `;
+}
+
+async function loadAQIForCity(city) {
+    const container = document.getElementById('aqi-container');
+    container.innerHTML = '<div class="glass-panel" style="text-align: center; padding: 2rem;">Loading air quality data...</div>';
+
+    try {
+        const data = await fetchAQI(city);
+        renderAQI(data);
+    } catch (error) {
+        console.error('AQI fetch failed:', error);
+        container.innerHTML = `
+            <div class="glass-panel" style="text-align: center; color: var(--color-danger);">
+                Unable to load air quality data for ${city.name}. Please try again later.
+            </div>
+        `;
+    }
+}
+
+function initAQI() {
+    populateCityPicker();
+    const savedIdx = localStorage.getItem('aqi_selected_city') || 0;
+    loadAQIForCity(CITIES[savedIdx]);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initApp();
+    initAQI();
+});
