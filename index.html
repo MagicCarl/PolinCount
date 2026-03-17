@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NC Pollen Tracker | Danger Zone</title>
+    <title>Pollen & Air Quality Tracker</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,8 +12,12 @@
 <body>
     <div id="app">
         <header>
+            <div class="city-picker-wrapper">
+                <label for="city-select" class="city-picker-label">Select City</label>
+                <select id="city-select" class="city-select"></select>
+            </div>
             <div id="danger-badge-container"></div>
-            <h1>NC Pollen Tracker</h1>
+            <h1>Pollen Tracker</h1>
             <p class="subtitle" id="report-date"></p>
         </header>
 
@@ -25,6 +29,13 @@
             <h2>Current Situation</h2>
             <p id="danger-description"></p>
             <div id="predominant-types" style="margin-top: 1rem;"></div>
+        </section>
+
+        <section id="aqi-section">
+            <h2 class="section-title">Air Quality Index</h2>
+            <div id="aqi-container" class="aqi-container">
+                <!-- AQI cards injected here -->
+            </div>
         </section>
 
         <footer>
