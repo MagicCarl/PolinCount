@@ -1,6 +1,6 @@
 import { fetchPollenData, getDangerZoneLevel, getCachedPollenData } from './src/pollenService.js';
 import { pollenData as fallbackData } from './src/pollenData.js';
-import { CITIES, fetchAQI, getAQILevel } from './src/aqiService.js';
+import { CITIES, fetchAQI, getAQILevel, fetchCityPollen } from './src/aqiService.js';
 
 function renderApp(pollenData, isRefreshing = false) {
     const reportDateEl = document.getElementById('report-date');
@@ -98,28 +98,8 @@ async function loadPollenData() {
 }
 
 async function initApp() {
-    const cached = getCachedPollenData();
-    const pollenContainer = document.getElementById('pollen-container');
-
-    if (cached) {
-        // Immediately render cached data while refreshing
-        renderApp(cached.data, true);
-
-        // Refresh in background
-        try {
-            const freshData = await fetchPollenData();
-            renderApp(freshData, false);
-        } catch (error) {
-            console.warn('Background refresh failed, keeping cached data:', error);
-            renderApp(cached.data, false);
-        }
-    } else {
-        // No cache — show loading, fetch data
-        pollenContainer.innerHTML = '<div class="glass-panel" style="grid-column: 1/-1; text-align: center;">Opening Pollen Sampler...</div>';
-
-        const data = await loadPollenData();
-        renderApp(data, false);
-    }
+    // Pollen + AQI loading is handled by initAQI → loadCityData
+    // initApp is now a no-op — kept for compatibility
 }
 
 // Expose retry for the error button
@@ -163,7 +143,7 @@ function populateCityPicker() {
 
     select.addEventListener('change', () => {
         localStorage.setItem('aqi_selected_city', select.value);
-        loadAQIForCity(CITIES[select.value]);
+        loadCityData(CITIES[select.value]);
     });
 }
 
@@ -207,27 +187,41 @@ function renderAQI(data) {
     `;
 }
 
-async function loadAQIForCity(city) {
-    const container = document.getElementById('aqi-container');
-    container.innerHTML = '<div class="glass-panel" style="text-align: center; padding: 2rem;">Loading air quality data...</div>';
+async function loadCityData(city) {
+    const aqiContainer = document.getElementById('aqi-container');
+    const pollenContainer = document.getElementById('pollen-container');
 
-    try {
-        const data = await fetchAQI(city);
+    aqiContainer.innerHTML = '<div class="glass-panel" style="text-align: center; padding: 2rem;">Loading air quality data...</div>';
+    pollenContainer.innerHTML = '<div class="glass-panel" style="grid-column: 1/-1; text-align: center;">Loading pollen data...</div>';
+
+    // Fetch AQI and pollen in parallel
+    const aqiPromise = fetchAQI(city).then(data => {
         renderAQI(data);
-    } catch (error) {
+    }).catch(error => {
         console.error('AQI fetch failed:', error);
-        container.innerHTML = `
+        aqiContainer.innerHTML = `
             <div class="glass-panel" style="text-align: center; color: var(--color-danger);">
-                Unable to load air quality data for ${city.name}. Please try again later.
+                Unable to load air quality data for ${city.name}.
             </div>
         `;
-    }
+    });
+
+    const pollenPromise = fetchCityPollen(city).then(data => {
+        renderApp(data, false);
+    }).catch(async (error) => {
+        console.warn('City pollen fetch failed, trying NC DEQ fallback:', error);
+        // Fall back to NC DEQ data
+        const data = await loadPollenData();
+        renderApp(data, false);
+    });
+
+    await Promise.allSettled([aqiPromise, pollenPromise]);
 }
 
 function initAQI() {
     populateCityPicker();
     const savedIdx = localStorage.getItem('aqi_selected_city') || 0;
-    loadAQIForCity(CITIES[savedIdx]);
+    loadCityData(CITIES[savedIdx]);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
