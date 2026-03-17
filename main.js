@@ -318,7 +318,9 @@ function initAQI() {
     populateCityPicker();
     const savedName = localStorage.getItem('aqi_selected_city_name');
     const idx = savedName ? CITIES.findIndex(c => c.name === savedName) : 0;
-    loadCityData(CITIES[idx >= 0 ? idx : 0]);
+    const city = CITIES[idx >= 0 ? idx : 0];
+    localStorage.setItem('aqi_selected_city_name', city.name);
+    loadCityData(city);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
