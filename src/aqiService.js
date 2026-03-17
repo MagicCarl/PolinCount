@@ -165,13 +165,14 @@ export async function fetchCityPollen(city) {
     if (!today) throw new Error('No pollen forecast data found');
 
     const triggers = today.Triggers || [];
-    const treeSpecies = triggers
-        .filter(t => t.PlantType === 1)
-        .map(t => t.Name);
+    const isTree = t => t.PlantType === 1 || t.PlantType === 'Tree';
+    const isGrass = t => t.PlantType === 2 || t.PlantType === 'Grass';
+    const isWeed = t => t.PlantType === 3 || t.PlantType === 'Weed';
 
-    const treePollen = today.Triggers?.filter(t => t.PlantType === 1) || [];
-    const grassPollen = today.Triggers?.filter(t => t.PlantType === 2) || [];
-    const weedPollen = today.Triggers?.filter(t => t.PlantType === 3) || [];
+    const treePollen = triggers.filter(isTree);
+    const grassPollen = triggers.filter(isGrass);
+    const weedPollen = triggers.filter(isWeed);
+    const treeSpecies = treePollen.map(t => t.Name);
 
     // Overall index from pollen.com (0-12 scale)
     const overallIndex = today.Index ?? 0;
