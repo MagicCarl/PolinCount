@@ -152,6 +152,60 @@ async function fetchPollenJSON(zip) {
     return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }
 
+// Common allergens by city (used when API triggers are sparse)
+const COMMON_TREE_ALLERGENS = {
+    'Boise': ['Oak', 'Birch', 'Alder', 'Juniper', 'Cottonwood', 'Elm'],
+    'Charleston': ['Oak', 'Pine', 'Cedar', 'Cypress', 'Maple', 'Hickory'],
+    'Dallas': ['Oak', 'Cedar', 'Elm', 'Pecan', 'Ash', 'Cottonwood'],
+    'Detroit': ['Oak', 'Maple', 'Birch', 'Elm', 'Ash', 'Walnut'],
+    'Greenville': ['Oak', 'Pine', 'Birch', 'Maple', 'Cedar', 'Sweet Gum'],
+    'Indianapolis': ['Oak', 'Maple', 'Elm', 'Ash', 'Birch', 'Cottonwood'],
+    'Kihei': ['Palm', 'Ironwood', 'Eucalyptus', 'Mango', 'Monkeypod'],
+    'Los Angeles': ['Oak', 'Olive', 'Mulberry', 'Ash', 'Eucalyptus', 'Alder'],
+    'New Orleans': ['Oak', 'Cedar', 'Pine', 'Pecan', 'Cypress', 'Elm'],
+    'New York': ['Oak', 'Birch', 'Maple', 'Elm', 'Ash', 'Cedar'],
+    'Oklahoma City': ['Oak', 'Cedar', 'Elm', 'Pecan', 'Ash', 'Cottonwood'],
+    'Orlando': ['Oak', 'Pine', 'Cedar', 'Cypress', 'Maple', 'Palm'],
+    'Philadelphia': ['Oak', 'Birch', 'Maple', 'Elm', 'Ash', 'Walnut'],
+    'Raleigh': ['Oak', 'Pine', 'Cedar', 'Birch', 'Maple', 'Sweet Gum', 'Mulberry'],
+    'Richmond': ['Oak', 'Birch', 'Maple', 'Cedar', 'Pine', 'Elm'],
+    'San Diego': ['Oak', 'Olive', 'Eucalyptus', 'Ash', 'Mulberry', 'Palm'],
+    'San Francisco': ['Oak', 'Alder', 'Birch', 'Eucalyptus', 'Cypress', 'Olive'],
+    'Tulsa': ['Oak', 'Cedar', 'Elm', 'Pecan', 'Ash', 'Cottonwood'],
+    'Wichita': ['Oak', 'Elm', 'Cedar', 'Ash', 'Cottonwood', 'Mulberry'],
+    'Wilmington': ['Oak', 'Birch', 'Maple', 'Elm', 'Ash', 'Cedar'],
+};
+
+const COMMON_WEED_ALLERGENS = {
+    'Boise': ['Ragweed', 'Sagebrush', 'Russian Thistle', 'Pigweed', 'Nettle'],
+    'Charleston': ['Ragweed', 'Mugwort', 'Dock', "Lamb's Quarters", 'Plantain'],
+    'Dallas': ['Ragweed', 'Pigweed', "Lamb's Quarters", 'Dock', 'Nettle'],
+    'Detroit': ['Ragweed', 'Mugwort', 'Nettle', "Lamb's Quarters", 'Dock'],
+    'Greenville': ['Ragweed', 'Mugwort', 'Dock', "Lamb's Quarters", 'Plantain'],
+    'Indianapolis': ['Ragweed', 'Mugwort', "Lamb's Quarters", 'Pigweed', 'Dock'],
+    'Kihei': ['Plantain', 'Pigweed', "Lamb's Quarters"],
+    'Los Angeles': ['Ragweed', 'Sagebrush', 'Russian Thistle', 'Pigweed', 'Nettle'],
+    'New Orleans': ['Ragweed', 'Mugwort', 'Dock', "Lamb's Quarters", 'Dog Fennel'],
+    'New York': ['Ragweed', 'Mugwort', 'Nettle', "Lamb's Quarters", 'Dock'],
+    'Oklahoma City': ['Ragweed', 'Pigweed', "Lamb's Quarters", 'Russian Thistle', 'Dock'],
+    'Orlando': ['Ragweed', 'Dog Fennel', 'Dock', "Lamb's Quarters", 'Plantain'],
+    'Philadelphia': ['Ragweed', 'Mugwort', 'Nettle', "Lamb's Quarters", 'Dock'],
+    'Raleigh': ['Ragweed', 'Mugwort', 'Nettle', "Lamb's Quarters", 'Dock'],
+    'Richmond': ['Ragweed', 'Mugwort', 'Dock', "Lamb's Quarters", 'Nettle'],
+    'San Diego': ['Ragweed', 'Sagebrush', 'Russian Thistle', 'Pigweed', 'Nettle'],
+    'San Francisco': ['Ragweed', 'Sagebrush', 'Nettle', 'Plantain', 'Dock'],
+    'Tulsa': ['Ragweed', 'Pigweed', "Lamb's Quarters", 'Russian Thistle', 'Dock'],
+    'Wichita': ['Ragweed', 'Pigweed', 'Russian Thistle', "Lamb's Quarters", 'Kochia'],
+    'Wilmington': ['Ragweed', 'Mugwort', 'Nettle', "Lamb's Quarters", 'Dock'],
+};
+
+export function getCityAllergens(cityName) {
+    return {
+        trees: COMMON_TREE_ALLERGENS[cityName] || ['Oak', 'Maple', 'Birch', 'Cedar', 'Pine', 'Elm'],
+        weeds: COMMON_WEED_ALLERGENS[cityName] || ['Ragweed', 'Mugwort', 'Nettle', "Lamb's Quarters", 'Dock'],
+    };
+}
+
 export async function fetchCityPollen(city) {
     const cacheKey = `${POLLEN_CACHE_KEY}_${city.zip}`;
     const cached = getCached(cacheKey);
@@ -173,6 +227,7 @@ export async function fetchCityPollen(city) {
     const grassPollen = triggers.filter(isGrass);
     const weedPollen = triggers.filter(isWeed);
     const treeSpecies = treePollen.map(t => t.Name);
+    const cityAllergens = getCityAllergens(city.name);
 
     // Overall index from pollen.com (0-12 scale)
     const overallIndex = today.Index ?? 0;
@@ -184,7 +239,7 @@ export async function fetchCityPollen(city) {
             count: overallIndex,
             ...pollenIndexToSeverity(treePollen.length > 0 ? overallIndex : 0),
             unit: 'index (0-12)',
-            details: treeSpecies,
+            details: treeSpecies.length > 0 ? treeSpecies : cityAllergens.trees,
         },
         {
             type: 'Grasses',
@@ -198,7 +253,7 @@ export async function fetchCityPollen(city) {
             count: weedPollen.length > 0 ? Math.round(overallIndex * 0.4 * 10) / 10 : 0,
             ...pollenIndexToSeverity(weedPollen.length > 0 ? overallIndex * 0.4 : 0),
             unit: 'index (0-12)',
-            details: weedPollen.map(t => t.Name),
+            details: weedPollen.length > 0 ? weedPollen.map(t => t.Name) : cityAllergens.weeds,
         },
     ];
 

@@ -23,15 +23,9 @@
             <p class="subtitle" id="report-date"></p>
         </header>
 
-        <main class="pollen-grid" id="pollen-container">
-            <!-- Cards will be injected here -->
-        </main>
+        <div class="powered-by" id="powered-by"></div>
 
-        <section class="glass-panel" id="danger-info">
-            <h2>Current Situation</h2>
-            <p id="danger-description"></p>
-            <div id="predominant-types" style="margin-top: 1rem;"></div>
-        </section>
+        <section id="breathable-score-section"></section>
 
         <section id="aqi-section">
             <h2 class="section-title">Air Quality Index</h2>
@@ -40,9 +34,22 @@
             </div>
         </section>
 
+        <main class="pollen-grid" id="pollen-container">
+            <!-- Pollen cards with species details injected here -->
+        </main>
+
+        <section id="health-guidance-section"></section>
+
+        <section id="alerts-section"></section>
+
         <footer>
-            <p>Data provided by NC DEQ Division of Air Quality (Raleigh Sampler)</p>
             <p id="last-updated"></p>
+            <div class="footer-links">
+                <a href="#" onclick="window.__showPrivacyPolicy(); return false;">Privacy Policy</a>
+                <span class="footer-sep">|</span>
+                <a href="#" onclick="window.__showTermsOfService(); return false;">Terms of Service</a>
+            </div>
+            <p class="copyright">&copy; 2026 PollenTracker All rights reserved.</p>
         </footer>
     </div>
     <script type="module" src="main.js"></script>
