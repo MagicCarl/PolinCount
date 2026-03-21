@@ -367,30 +367,46 @@ function renderAlerts() {
     `;
 
     // Handle form submission
-    document.getElementById('alerts-form').addEventListener('submit', (e) => {
+    document.getElementById('alerts-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('alert-email').value;
         const zip = document.getElementById('alert-zip').value;
+        const btn = document.querySelector('.alerts-btn');
+        btn.textContent = 'Signing up...';
+        btn.disabled = true;
 
-        // Store locally (no backend yet)
-        localStorage.setItem('pollen_alert_email', email);
-        localStorage.setItem('pollen_alert_zip', zip);
+        try {
+            const res = await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, zip }),
+            });
 
-        // Show success, hide form
-        document.getElementById('alerts-form').style.display = 'none';
-        document.getElementById('alerts-success').style.display = 'block';
+            if (!res.ok) throw new Error('Signup failed');
+
+            localStorage.setItem('pollen_alert_email', email);
+            localStorage.setItem('pollen_alert_zip', zip);
+            document.getElementById('alerts-form').style.display = 'none';
+            document.getElementById('alerts-success').style.display = 'block';
+        } catch (err) {
+            btn.textContent = 'Get Pollen Alerts';
+            btn.disabled = false;
+            alert('Signup failed. Please try again.');
+        }
     });
 
     // Handle unsubscribe
-    document.getElementById('alerts-unsubscribe').addEventListener('click', () => {
+    document.getElementById('alerts-unsubscribe').addEventListener('click', async () => {
+        const email = localStorage.getItem('pollen_alert_email');
+        if (email) {
+            try {
+                await fetch(`/api/unsubscribe?email=${encodeURIComponent(email)}`);
+            } catch { /* still clear locally */ }
+        }
         localStorage.removeItem('pollen_alert_email');
         localStorage.removeItem('pollen_alert_zip');
-
-        // Show form again, hide success
         document.getElementById('alerts-form').style.display = 'block';
         document.getElementById('alerts-success').style.display = 'none';
-
-        // Clear form fields
         document.getElementById('alert-email').value = '';
         document.getElementById('alert-zip').value = '';
     });
