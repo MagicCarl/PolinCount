@@ -1,7 +1,7 @@
 /**
  * Air Quality Index (AQI) + City Pollen service
- * AQI: Open-Meteo API (free, no key)
- * Pollen: pollen.com API via CORS proxy (free, no key)
+ * AQI: /api/aqi (proxies Open-Meteo, server-side cached)
+ * Pollen: /api/pollen (proxies pollen.com, server-side cached)
  */
 
 export const CITIES = [
@@ -27,20 +27,6 @@ export const CITIES = [
     { name: 'Wilmington', state: 'DE', lat: 39.7391, lon: -75.5398, zip: '19801' },
 ];
 
-const AQI_CACHE_KEY = 'aqi_data_cache';
-const POLLEN_CACHE_KEY = 'pollen_city_cache';
-const AQI_CACHE_TTL = 1000 * 60 * 30; // 30 minutes
-const POLLEN_CACHE_TTL = 1000 * 60 * 60; // 1 hour
-
-const CORS_PROXIES = [
-    { url: 'https://api.allorigins.win/get?url=', type: 'json' },
-    { url: 'https://corsproxy.io/?', type: 'text' },
-    { url: 'https://api.codetabs.com/v1/proxy?quest=', type: 'text' },
-];
-
-/**
- * Get AQI level info from US AQI value
- */
 export function getAQILevel(aqi) {
     if (aqi <= 50) return { label: 'Good', class: 'aqi-good', color: '#22c55e', description: 'Air quality is satisfactory.' };
     if (aqi <= 100) return { label: 'Moderate', class: 'aqi-moderate', color: '#eab308', description: 'Acceptable air quality. Some pollutants may be a concern for sensitive individuals.' };
@@ -50,106 +36,12 @@ export function getAQILevel(aqi) {
     return { label: 'Hazardous', class: 'aqi-hazardous', color: '#991b1b', description: 'Health warning of emergency conditions.' };
 }
 
-/**
- * Convert pollen.com index (0-12) to severity
- */
 function pollenIndexToSeverity(index) {
     if (index >= 9.7) return { severity: 'VERY HIGH', severityLevel: 4 };
     if (index >= 7.3) return { severity: 'HIGH', severityLevel: 3 };
     if (index >= 4.9) return { severity: 'MODERATE', severityLevel: 2 };
     if (index >= 2.5) return { severity: 'LOW-MODERATE', severityLevel: 2 };
     return { severity: 'LOW', severityLevel: 1 };
-}
-
-// --- Caching helpers ---
-
-function getCached(key) {
-    try {
-        const cached = localStorage.getItem(key);
-        if (!cached) return null;
-        const { data, timestamp, ttl } = JSON.parse(cached);
-        if (Date.now() - timestamp > ttl) return null;
-        return data;
-    } catch {
-        return null;
-    }
-}
-
-function setCache(key, data, ttl) {
-    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now(), ttl }));
-}
-
-// --- AQI ---
-
-export async function fetchAQI(city) {
-    const cacheKey = `${AQI_CACHE_KEY}_${city.name}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
-    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${city.lat}&longitude=${city.lon}&current=us_aqi,pm10,pm2_5,nitrogen_dioxide,ozone&timezone=auto`;
-
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`AQI fetch failed: ${response.status}`);
-
-    const json = await response.json();
-    const current = json.current;
-
-    const result = {
-        city: city.name,
-        state: city.state,
-        aqi: Math.round(current.us_aqi || 0),
-        pm25: current.pm2_5?.toFixed(1) ?? '--',
-        pm10: current.pm10?.toFixed(1) ?? '--',
-        no2: current.nitrogen_dioxide?.toFixed(1) ?? '--',
-        ozone: current.ozone?.toFixed(1) ?? '--',
-        time: new Date(current.time).toLocaleString(),
-    };
-
-    setCache(cacheKey, result, AQI_CACHE_TTL);
-    return result;
-}
-
-// --- City Pollen (pollen.com) ---
-
-async function fetchViaProxy(targetUrl) {
-    const fetches = CORS_PROXIES.map(async (proxy) => {
-        const url = proxy.type === 'json'
-            ? `${proxy.url}${encodeURIComponent(targetUrl)}`
-            : `${proxy.url}${targetUrl}`;
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
-
-        try {
-            const response = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeout);
-            if (!response.ok) throw new Error(`Proxy ${response.status}`);
-
-            if (proxy.type === 'json') {
-                const data = await response.json();
-                return data.contents;
-            }
-            return await response.text();
-        } catch (err) {
-            clearTimeout(timeout);
-            throw err;
-        }
-    });
-
-    return Promise.any(fetches);
-}
-
-async function fetchPollenJSON(zip) {
-    // Try our own serverless proxy first (works on Vercel)
-    try {
-        const response = await fetch(`/api/pollen?zip=${zip}`);
-        if (response.ok) return await response.json();
-    } catch { /* fall through */ }
-
-    // Fall back to CORS proxies
-    const targetUrl = `https://www.pollen.com/api/forecast/current/pollen/${zip}`;
-    const raw = await fetchViaProxy(targetUrl);
-    return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }
 
 // Common allergens by city (used when API triggers are sparse)
@@ -206,15 +98,26 @@ export function getCityAllergens(cityName) {
     };
 }
 
+export async function fetchAQI(city) {
+    const response = await fetch(`/api/aqi?lat=${city.lat}&lon=${city.lon}`);
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `AQI server returned ${response.status}`);
+    }
+    const data = await response.json();
+    // Add city identity (server doesn't know it from lat/lon)
+    return { ...data, city: city.name, state: city.state };
+}
+
 export async function fetchCityPollen(city) {
-    const cacheKey = `${POLLEN_CACHE_KEY}_${city.zip}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
+    const response = await fetch(`/api/pollen?zip=${city.zip}`);
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Pollen server returned ${response.status}`);
+    }
+    const json = await response.json();
 
-    const json = await fetchPollenJSON(city.zip);
-
-    // pollen.com returns { Location, Type, ForecastDate, Forecast[] }
-    // Forecast[0] = yesterday, [1] = today, [2] = tomorrow
+    // pollen.com returns { Location: { periods: [...] } }
     const today = json.Location?.periods?.[1] || json.Location?.periods?.[0];
     if (!today) throw new Error('No pollen forecast data found');
 
@@ -229,10 +132,8 @@ export async function fetchCityPollen(city) {
     const treeSpecies = treePollen.map(t => t.Name);
     const cityAllergens = getCityAllergens(city.name);
 
-    // Overall index from pollen.com (0-12 scale)
     const overallIndex = today.Index ?? 0;
 
-    // Build pollen array similar to NC DEQ format
     const pollen = [
         {
             type: 'Trees',
@@ -257,7 +158,7 @@ export async function fetchCityPollen(city) {
         },
     ];
 
-    const result = {
+    return {
         city: city.name,
         state: city.state,
         period: `Pollen forecast for ${city.name}, ${city.state}`,
@@ -265,7 +166,4 @@ export async function fetchCityPollen(city) {
         pollen,
         totalIndex: overallIndex,
     };
-
-    setCache(cacheKey, result, POLLEN_CACHE_TTL);
-    return result;
 }
