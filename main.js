@@ -1,4 +1,4 @@
-import { fetchPollenData, getDangerZoneLevel, getCachedPollenData } from './src/pollenService.js';
+import { fetchPollenData, getDangerZoneLevel } from './src/pollenService.js';
 import { pollenData as fallbackData } from './src/pollenData.js';
 import { CITIES, fetchAQI, getAQILevel, fetchCityPollen, getCityAllergens } from './src/aqiService.js';
 
@@ -531,17 +531,7 @@ async function loadPollenData() {
     try {
         return await fetchPollenData();
     } catch (fetchError) {
-        console.warn('Live fetch failed:', fetchError);
-
-        // Try cache (even if stale)
-        const cached = getCachedPollenData();
-        if (cached) {
-            console.log('Using cached data as fallback');
-            return cached.data;
-        }
-
-        // Ultimate fallback: hardcoded sample data
-        console.log('Using hardcoded fallback data');
+        console.warn('Live fetch failed, using hardcoded fallback:', fetchError);
         return { ...fallbackData, lastUpdated: new Date().toLocaleString() };
     }
 }
