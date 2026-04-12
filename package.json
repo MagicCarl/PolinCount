@@ -15,5 +15,8 @@
   "type": "commonjs",
   "devDependencies": {
     "vite": "^8.0.0"
+  },
+  "dependencies": {
+    "node-html-parser": "^7.1.0"
   }
 }
