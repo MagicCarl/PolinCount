@@ -87,3 +87,29 @@ validates `lat`/`lon` against the 20 known city coordinates
 rejected, which also stops cache-busting by walking the coordinate space. The
 API key is sent as an `X-Goog-Api-Key` header rather than a query parameter so
 it does not land in request logs.
+
+## NC DEQ species are seasonal
+
+NC DEQ names species for the **predominant pollen type only**, in a comment
+footer under the table. In September that is weeds; in March and April it is
+trees. So a type can read HIGH with no species listed — that is the source's
+reporting, not a parsing failure, and the UI says so on the card rather than
+leaving a blank.
+
+They also reword that footer through the year. All four of these are real:
+
+```
+Predominant Pollen: Weeds (Ragweed, Pigweed, Urtica)   2026-09-15
+Predominant Pollen (Trees): Maple, oak, pine, walnut   2026-03-20
+Predominant Tree Pollen: Oak, Pine and Sycamore        2026-04-15
+Predominant Pollen (Grasses).                          2026-06-15
+```
+
+Each has a saved fixture in `test/fixtures/` and a test. A comment matching
+none of the patterns yields **no species**, never a guess — an earlier version
+turned the March wording into a bogus entry keyed on the word "Pollen".
+
+This is why the app does not pull tree species from Google for Raleigh: the
+measured source already publishes them when trees are the predominant type,
+and mixing a measured count with a modelled species list on one card
+reintroduces exactly the ambiguity this document exists to prevent.

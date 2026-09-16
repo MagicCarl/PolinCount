@@ -42,26 +42,79 @@ function speciesKey(word) {
     return normalize(word).toLowerCase().replace(/s$/, '');
 }
 
-/**
- * Pull species names out of the report's comment footer, which reads e.g.
- * "Comments: Predominant Pollen: Weeds (Ragweed, Pigweed, Urtica)".
- * Returns a map of pollen type -> species array.
- */
-function parseSpeciesByType(tableText) {
-    const species = {};
-    const commentMatch = tableText.match(/Comments:(.*)$/i);
-    if (!commentMatch) return species;
+// Matched explicitly rather than by stripping a plural suffix: "grass" and
+// "grasses" both need to land on Grasses, and no single strip rule does that
+// without also turning "trees" into "tre".
+const TYPE_ALIASES = {
+    tree: 'Trees', trees: 'Trees',
+    grass: 'Grasses', grasses: 'Grasses',
+    weed: 'Weeds', weeds: 'Weeds',
+};
 
-    const re = /([A-Za-z]+)\s*\(([^)]+)\)/g;
-    let match;
-    while ((match = re.exec(commentMatch[1])) !== null) {
-        const names = match[2]
-            .split(',')
-            .map(s => normalize(s))
-            .filter(Boolean);
-        if (names.length > 0) species[speciesKey(match[1])] = names;
+function canonicalType(word) {
+    return TYPE_ALIASES[normalize(word).toLowerCase()] || null;
+}
+
+// "maple" -> "Maple", "sweet gum" -> "Sweet Gum". NC DEQ is inconsistent about
+// capitalising species, sometimes within a single line.
+function titleCase(name) {
+    return name.replace(/\S+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
+function splitSpecies(text) {
+    return normalize(text)
+        .replace(/\.\s*$/, '')
+        .split(/,|\sand\s|\s&\s/i)
+        .map(part => normalize(part))
+        .filter(Boolean)
+        .map(titleCase);
+}
+
+// NC DEQ words the comment footer differently through the year. All four of
+// these are real, pulled from their own archive:
+//
+//   "Predominant Pollen: Weeds (Ragweed, Pigweed, Urtica)"   2026-09-15
+//   "Predominant Pollen (Trees): Maple, oak, pine, walnut"   2026-03-20
+//   "Predominant Tree Pollen: Oak, Pine and Sycamore"        2026-04-15
+//   "Predominant Pollen (Grasses)."                          2026-06-15
+//
+// Order matters: the more specific patterns must be tried before the bare
+// "(Type)" catch. Anything matching none of them yields no species at all —
+// never a guess, which is what the old hardcoded allergen lists did.
+const COMMENT_PATTERNS = [
+    /Predominant\s+Pollen\s*:\s*(Trees?|Grasses?|Weeds?)\s*\(([^)]*)\)/i,
+    /Predominant\s+Pollen\s*\(\s*(Trees?|Grasses?|Weeds?)\s*\)\s*:\s*(.+)/i,
+    /Predominant\s+(Tree|Grass|Weed)s?\s+Pollen\s*:\s*(.+)/i,
+    /Predominant\s+Pollen\s*\(\s*(Trees?|Grasses?|Weeds?)\s*\)/i,
+];
+
+/**
+ * Read the comment footer into { predominant, speciesByType }.
+ * NC DEQ names species only for the predominant type, so at most one type
+ * carries a species list on any given day.
+ */
+function parseComment(tableText) {
+    const empty = { predominant: null, speciesByType: {} };
+
+    const commentMatch = tableText.match(/Comments:(.*)$/i);
+    if (!commentMatch) return empty;
+    const text = normalize(commentMatch[1]);
+
+    for (const pattern of COMMENT_PATTERNS) {
+        const match = text.match(pattern);
+        if (!match) continue;
+
+        const type = canonicalType(match[1]);
+        if (!type) continue;
+
+        const species = match[2] ? splitSpecies(match[2]) : [];
+        return {
+            predominant: type,
+            speciesByType: species.length > 0 ? { [speciesKey(type)]: species } : {},
+        };
     }
-    return species;
+
+    return empty;
 }
 
 function parsePollenHTML(html) {
@@ -95,7 +148,7 @@ function parsePollenHTML(html) {
     }
 
     const tableText = normalize(table.text);
-    const speciesByType = parseSpeciesByType(tableText);
+    const { predominant, speciesByType } = parseComment(tableText);
 
     const pollen = dataRows.map(row => {
         const cells = row.querySelectorAll('td');
@@ -127,8 +180,6 @@ function parsePollenHTML(html) {
         ? totalMatch[1]
         : pollen.reduce((acc, p) => acc + (p.count || 0), 0).toFixed(1);
 
-    const predominantMatch = tableText.match(/Predominant Pollen:\s*([^(]+)/i);
-
     return {
         source: 'NC DEQ',
         sourceUrl: NC_DEQ_URL,
@@ -140,7 +191,7 @@ function parsePollenHTML(html) {
         lastUpdated: new Date().toISOString(),
         pollen,
         totalCount,
-        predominant: predominantMatch ? normalize(predominantMatch[1]) : null,
+        predominant,
         unit: 'grains/m³',
     };
 }

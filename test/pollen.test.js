@@ -81,6 +81,63 @@ test('NC DEQ: throws when no row can be read at all', () => {
     assert.throws(() => parsePollenHTML(mangled), /No pollen row could be read/);
 });
 
+function loadFixture(name) {
+    return fs.readFileSync(path.join(__dirname, 'fixtures', `ncdeq-${name}.html`), 'utf8');
+}
+
+// NC DEQ rewords the comment footer through the year. Each of these is a real
+// saved report — the parser must read species from all of them.
+test('NC DEQ comment format: "Predominant Pollen: Weeds (Ragweed, Pigweed, Urtica)"', () => {
+    const data = parsePollenHTML(loadFixture('2026-09-15'));
+    assert.strictEqual(data.predominant, 'Weeds');
+    assert.deepStrictEqual(
+        data.pollen.find(p => p.type === 'Weeds').details,
+        ['Ragweed', 'Pigweed', 'Urtica']
+    );
+});
+
+test('NC DEQ comment format: "Predominant Pollen (Trees): Maple, oak, pine, walnut"', () => {
+    // Type inside the parens, species after a colon, inconsistent capitalisation.
+    const data = parsePollenHTML(loadFixture('trees-parens'));
+    assert.strictEqual(data.predominant, 'Trees');
+    assert.deepStrictEqual(
+        data.pollen.find(p => p.type === 'Trees').details,
+        ['Maple', 'Oak', 'Pine', 'Walnut']
+    );
+});
+
+test('NC DEQ comment format: "Predominant Tree Pollen: Oak, Pine and Sycamore"', () => {
+    // No parentheses at all, and "and" separating the final species.
+    const data = parsePollenHTML(loadFixture('trees-noparens'));
+    assert.strictEqual(data.predominant, 'Trees');
+    assert.deepStrictEqual(
+        data.pollen.find(p => p.type === 'Trees').details,
+        ['Oak', 'Pine', 'Sycamore']
+    );
+});
+
+test('NC DEQ comment format: "Predominant Pollen (Grasses)." with no species', () => {
+    const data = parsePollenHTML(loadFixture('grasses-nospecies'));
+    assert.strictEqual(data.predominant, 'Grasses');
+    assert.ok(data.pollen.every(p => p.details.length === 0), 'no species should be invented');
+});
+
+test('NC DEQ: species attach only to the predominant type, never to others', () => {
+    const data = parsePollenHTML(loadFixture('trees-noparens'));
+    assert.deepStrictEqual(data.pollen.find(p => p.type === 'Grasses').details, []);
+    assert.deepStrictEqual(data.pollen.find(p => p.type === 'Weeds').details, []);
+});
+
+test('NC DEQ: an unrecognized comment yields no species rather than junk', () => {
+    // The old regex turned "Predominant Pollen (Trees): ..." into a bogus
+    // species entry keyed on the word "Pollen". Unparseable means empty.
+    const mangled = loadFixture('2026-09-15')
+        .replace('Predominant Pollen: Weeds (Ragweed, Pigweed, Urtica)', 'Sampling equipment offline (partial day)');
+    const data = parsePollenHTML(mangled);
+    assert.strictEqual(data.predominant, null);
+    assert.ok(data.pollen.every(p => p.details.length === 0));
+});
+
 test('NC DEQ: matches footer species to rows despite singular/plural wording', () => {
     const singular = fixture.replace('Predominant Pollen: Weeds (', 'Predominant Pollen: Weed (');
     const weeds = parsePollenHTML(singular).pollen.find(p => p.type === 'Weeds');

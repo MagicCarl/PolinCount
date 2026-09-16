@@ -1,0 +1,196 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Pollen Report</title>
+
+<link rel="stylesheet" href="/aq/aqCommon/daqExtMain.css" type="text/css">
+<link rel="stylesheet" href="/aq/ambient/content/ambient.css?v=1" type="text/css">
+<link rel="stylesheet" href="/aq/ambient/content/calendar-blue.css" type="text/css">
+<link rel="stylesheet" href="/aq/aqCommon/portal/mainP-I.css" type="text/css">
+<link rel="stylesheet" href="/aq/ambient/content/pollen-ada.css" type="text/css">
+
+<script type="text/javascript" src="/aq/ambient/content/calendar_stripped.js"></script>
+<script type="text/javascript" src="/aq/ambient/content/calendar-en.js"></script>
+<script type="text/javascript" src="/aq/ambient/content/calendar-setup_stripped.js"></script>
+<script type="text/javascript" src="/aq/ambient/content/ambient.js"></script>
+<script type="text/javascript" src="/aq/aqCommon/portal/jquery-1.8.3.js"></script>
+<script type="text/javascript" src="/aq/aqCommon/portal/jquery-ui-1.9.2.custom.js"></script>
+
+</head>
+
+<body onload="initCalendar();">
+
+<div id="mainContainer">
+
+<main id="pollenmain">
+
+    <h1>
+        
+        Pollen Report for Raleigh, NC
+    </h1>
+
+    
+        
+    
+
+    <!-- Summary -->
+    
+        
+
+            
+                <p class="normaltext">
+                    A summary of the pollen collected during
+                    9:00 AM Thursday, March 19, 2026 -
+                    9:00 AM Friday, March 20, 2026.
+                    <br>
+
+                    <span class="report-actions">
+                        <button type="button" id="date_select" class="link-button">
+                            Change Date
+                        </button>
+
+                        <span class="action-separator" aria-hidden="true">|</span>
+
+                        <a href="https://app.powerbigov.us/view?r=eyJrIjoiNzE3ZjcxZGQtMzAwMC00MGRhLWJjYmYtZTMxYzc0Y2JjNTExIiwidCI6IjdhNzY4MWRjLWI5ZDAtNDQ5YS04NWMzLWVjYzI2Y2Q3ZWQxOSJ9">
+                            See Pollen Trend Graph
+                        </a>
+                    </span>
+                </p>
+            
+
+            
+
+        
+
+        
+    
+
+    <!-- Hidden Form -->
+    <form id="mainForm" action="/aq/ambient/Pollen.jsp" method="get">
+        <input type="hidden" name="date" id="date"
+            value="03/20/2026">
+    </form>
+
+    <!-- Table -->
+    
+        
+
+            <table class="normaltext pollen-table">
+                <caption>
+                    Pollen count summary for Raleigh, North Carolina
+                </caption>
+
+                <thead>
+                    <tr>
+                        <th scope="col">Pollen Type</th>
+                        <th scope="col">Number of Grains</th>
+                        <th scope="col">Severity</th>
+                        <th scope="col">
+                            Pollen Count<br>(grains/m<sup>3</sup>)
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    
+                        <tr>
+                            <th scope="row">
+                                Grasses
+                            </th>
+                            <td>
+                                &nbsp;&nbsp;0
+                            </td>
+                            <td>
+                                LOW (0 - 15 grains)
+                            </td>
+                            <td>
+                                &nbsp;&nbsp;0.0
+                            </td>
+                        </tr>
+                    
+                        <tr>
+                            <th scope="row">
+                                Trees
+                            </th>
+                            <td>
+                                667
+                            </td>
+                            <td>
+                                HIGH (271 - 3000 grains)
+                            </td>
+                            <td>
+                                213.8
+                            </td>
+                        </tr>
+                    
+                        <tr>
+                            <th scope="row">
+                                Weeds
+                            </th>
+                            <td>
+                                &nbsp;26
+                            </td>
+                            <td>
+                                LOW (0 - 30 grains)
+                            </td>
+                            <td>
+                                &nbsp;&nbsp;8.3
+                            </td>
+                        </tr>
+                    
+                </tbody>
+
+                <tfoot>
+                    <tr>
+                        <td colspan="4">
+                            Total Pollen Count for this Reporting Period:
+                            222.1 grains/m<sup>3</sup>.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="4">
+                            Comments: Predominant Pollen (Trees): Maple, oak, pine, walnut
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <div class="info-link-block">
+                <p class="normaltext">
+                    <a href="https://deq.nc.gov/about/divisions/air-quality/air-quality-data/nata-epa-national-air-toxics-assessment-for-north-carolina/pollen-monitoring">
+                        More information about pollen monitoring and this report
+                    </a>
+                </p>
+            </div>
+
+        
+    
+
+    <!-- Footer text -->
+    <div class="subscription-text">
+        <p class="normaltext">
+            We also send the daily pollen reports to an email distribution list as soon as they are compiled.
+            <br>
+            To join the list, please send us an email message with contact information in the body of the message.
+            <br>
+            <strong>Your first name and last name are required.</strong>
+            <a href="https://lists.deq.nc.gov/DEQ.DAQ.PollenReport/subscribe/">
+                Subscribe to pollen report emails
+            </a>.
+            You can also follow the pollen report on
+            <a href="https://x.com/NCPollen">Follow NC Pollen on X</a>.
+        </p>
+    </div>
+
+</main>
+
+</div>
+
+</body>
+</html>
