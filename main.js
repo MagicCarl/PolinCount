@@ -507,14 +507,29 @@ function renderApp(pollenData, isRefreshing = false) {
         // Species — shown only when the provider actually reported them.
         const species = (p.details || []).filter(Boolean);
         const speciesLabel = p.type === 'Grasses' ? 'Grass' : p.type.replace(/s$/, '');
-        const speciesHTML = species.length > 0 ? `
+        let speciesHTML = '';
+        if (species.length > 0) {
+            speciesHTML = `
                 <div class="species-section">
                     <div class="species-title">Reported ${speciesLabel} Allergens</div>
                     <div class="species-tags">
                         ${species.map(name => `<span class="species-tag" style="border-color: ${barColor}40; color: ${barColor}">${esc(name)}</span>`).join('')}
                     </div>
                 </div>
-            ` : '';
+            `;
+        } else if (reported) {
+            // Say why the list is empty. NC DEQ names species only for the
+            // predominant type, so a HIGH reading can legitimately have none —
+            // an unexplained blank reads as a bug, and guessing reads as a lie.
+            const note = pollenData.measured
+                ? `${esc(pollenData.source)} names species only for the day's predominant type${pollenData.predominant ? ` (${esc(pollenData.predominant)})` : ''}.`
+                : 'No individual species reported for this type today.';
+            speciesHTML = `
+                <div class="species-section">
+                    <p class="species-note">${note}</p>
+                </div>
+            `;
+        }
 
         return `
             <div class="glass-panel pollen-card ${isRefreshing ? 'updating' : ''}">
