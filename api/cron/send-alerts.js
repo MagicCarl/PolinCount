@@ -28,49 +28,64 @@ function getAQILabel(aqi) {
     return { label: 'Very Unhealthy', color: '#7c3aed' };
 }
 
-function pollenSeverityLabel(index) {
-    if (index >= 9.7) return 'Very High';
-    if (index >= 7.3) return 'High';
-    if (index >= 4.9) return 'Moderate';
-    if (index >= 2.5) return 'Low-Moderate';
-    return 'Low';
+const { UPI_CATEGORY, UPI_TO_SEVERITY_LEVEL, calculateBreathableScore } = require('../_lib/upi.js');
+
+function pollenSeverityLabel(upi) {
+    return UPI_CATEGORY[upi] || 'Unknown';
 }
 
-function calculateBreathableScore(pollenIndex, aqi) {
-    const pollenScore = Math.max(0, 10 - (pollenIndex / 12) * 10);
-    const aqiScore = Math.max(0, 10 - (aqi / 300) * 10);
-    return Math.round(pollenScore * 0.6 + aqiScore * 0.4);
-}
-
-async function fetchPollenData(zip) {
+async function geocodeZip(zip) {
     try {
-        const response = await fetch(
-            `https://www.pollen.com/api/forecast/current/pollen/${zip}`,
-            { headers: { 'Accept': 'application/json', 'Referer': 'https://www.pollen.com/', 'User-Agent': 'Mozilla/5.0' } }
+        const res = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(zip)}&count=1&countryCode=US&language=en&format=json`
         );
-        if (!response.ok) return null;
-        const json = await response.json();
-        const today = json.Location?.periods?.[1] || json.Location?.periods?.[0];
-        if (!today) return null;
-        const triggers = (today.Triggers || []).map(t => t.Name).filter(Boolean);
-        return { index: today.Index ?? 0, triggers };
+        if (!res.ok) return null;
+        const json = await res.json();
+        const loc = json.results?.[0];
+        return loc ? { lat: loc.latitude, lon: loc.longitude } : null;
     } catch {
         return null;
     }
 }
 
-async function fetchAQIData(zip) {
-    try {
-        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${zip}&count=1&language=en&format=json`);
-        if (!geoRes.ok) return null;
-        const geoData = await geoRes.json();
-        const loc = geoData.results?.[0];
-        if (!loc) return null;
+/**
+ * Per-type pollen from the Google Pollen API — the same source the site uses.
+ * Returns null when it cannot be read, so the caller skips rather than
+ * emailing a number it did not actually retrieve.
+ */
+async function fetchPollen(lat, lon) {
+    const apiKey = process.env.GOOGLE_POLLEN_API_KEY;
+    if (!apiKey) return null;
 
-        const aqiRes = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${loc.latitude}&longitude=${loc.longitude}&current=us_aqi&timezone=auto`);
-        if (!aqiRes.ok) return null;
-        const aqiData = await aqiRes.json();
-        return aqiData.current?.us_aqi ?? null;
+    try {
+        const url = `https://pollen.googleapis.com/v1/forecast:lookup?key=${apiKey}`
+            + `&location.latitude=${lat}&location.longitude=${lon}`
+            + '&days=1&languageCode=en&plantsDescription=false';
+        const res = await fetch(url);
+        if (!res.ok) return null;
+
+        const json = await res.json();
+        const daily = json.dailyInfo?.[0];
+        if (!daily) return null;
+
+        const types = daily.pollenTypeInfo || [];
+        const upi = Math.max(0, ...types.map(t => t.indexInfo?.value ?? 0));
+        const triggers = types
+            .filter(t => (t.indexInfo?.value ?? 0) > 0)
+            .map(t => `${t.displayName} (${t.indexInfo.category})`);
+
+        return { upi, severityLevel: UPI_TO_SEVERITY_LEVEL[upi] || 1, triggers };
+    } catch {
+        return null;
+    }
+}
+
+async function fetchAQIData(lat, lon) {
+    try {
+        const res = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi&timezone=auto`);
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json.current?.us_aqi ?? null;
     } catch {
         return null;
     }
@@ -78,9 +93,9 @@ async function fetchAQIData(zip) {
 
 function buildEmailHTML(zip, pollen, aqi, breathableScore, unsubscribeUrl) {
     const aqiInfo = aqi !== null ? getAQILabel(aqi) : { label: 'Unavailable', color: '#94a3b8' };
-    const pollenLevel = pollenSeverityLabel(pollen?.index || 0);
+    const pollenLevel = pollenSeverityLabel(pollen.upi);
     const scoreColor = breathableScore >= 7 ? '#22c55e' : breathableScore >= 4 ? '#eab308' : '#ef4444';
-    const triggers = pollen?.triggers?.slice(0, 5).join(', ') || 'None detected';
+    const triggers = pollen.triggers?.slice(0, 5).join(', ') || 'None detected';
 
     return `
     <div style="font-family:Inter,Arial,sans-serif;max-width:500px;margin:0 auto;background:#1e293b;color:#e2e8f0;border-radius:16px;overflow:hidden;">
@@ -98,7 +113,7 @@ function buildEmailHTML(zip, pollen, aqi, breathableScore, unsubscribeUrl) {
                 <tr>
                     <td style="padding:12px;background:#334155;border-radius:8px 8px 0 0;">
                         <div style="font-size:12px;color:#94a3b8;">Pollen Level</div>
-                        <div style="font-size:18px;font-weight:bold;color:#f59e0b;">${pollenLevel} (${pollen?.index || 0}/12)</div>
+                        <div style="font-size:18px;font-weight:bold;color:#f59e0b;">${pollenLevel} (${pollen.upi}/5 UPI)</div>
                     </td>
                 </tr>
                 <tr>
@@ -109,11 +124,15 @@ function buildEmailHTML(zip, pollen, aqi, breathableScore, unsubscribeUrl) {
                 </tr>
                 <tr>
                     <td style="padding:12px;background:#334155;border-radius:0 0 8px 8px;">
-                        <div style="font-size:12px;color:#94a3b8;">Top Allergens</div>
+                        <div style="font-size:12px;color:#94a3b8;">Active Pollen Types</div>
                         <div style="font-size:14px;color:#e2e8f0;">${triggers}</div>
                     </td>
                 </tr>
             </table>
+            <p style="font-size:11px;color:#64748b;text-align:center;margin:12px 0 0;">
+                Forecast from the Google Pollen API (UPI 0-5). The site may show
+                measured grain counts where a local monitoring station is available.
+            </p>
             <p style="font-size:12px;color:#64748b;text-align:center;margin:16px 0 0;">
                 <a href="https://nc-pollen-tracker.vercel.app" style="color:#f59e0b;">View Full Report</a>
                 &nbsp;|&nbsp;
@@ -153,11 +172,26 @@ module.exports = async function handler(req, res) {
             const { zip } = subscriber;
             if (!zip) continue;
 
-            const pollen = await fetchPollenData(zip);
-            const aqi = await fetchAQIData(zip);
-            const pollenIndex = pollen?.index || 0;
-            const aqiValue = aqi ?? 0;
-            const breathableScore = calculateBreathableScore(pollenIndex, aqiValue);
+            const coords = await geocodeZip(zip);
+            if (!coords) {
+                console.warn(`Skipping ${email}: could not geocode zip ${zip}`);
+                skipped++;
+                continue;
+            }
+
+            const [pollen, aqi] = await Promise.all([
+                fetchPollen(coords.lat, coords.lon),
+                fetchAQIData(coords.lat, coords.lon),
+            ]);
+
+            // Never email a score built on data we failed to fetch.
+            if (!pollen) {
+                console.warn(`Skipping ${email}: pollen data unavailable for ${zip}`);
+                skipped++;
+                continue;
+            }
+
+            const breathableScore = calculateBreathableScore(pollen.severityLevel, aqi);
 
             // Only send if conditions are concerning (breathable score <= 7)
             if (breathableScore > 7) {

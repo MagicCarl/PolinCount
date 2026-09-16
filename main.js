@@ -1,6 +1,5 @@
-import { fetchPollenData, getDangerZoneLevel } from './src/pollenService.js';
-import { pollenData as fallbackData } from './src/pollenData.js';
-import { CITIES, fetchAQI, getAQILevel, fetchCityPollen, getCityAllergens } from './src/aqiService.js';
+import { getDangerZoneLevel } from './src/pollenService.js';
+import { CITIES, fetchAQI, getAQILevel, fetchCityPollen } from './src/aqiService.js';
 
 // --- Info Modal ---
 
@@ -22,34 +21,86 @@ function showInfoModal(title, content) {
     document.body.appendChild(overlay);
 }
 
+// Upstream text (species names, provider error messages) is scraped from
+// third-party HTML, so it is escaped before it ever reaches innerHTML.
+function esc(value) {
+    return String(value === null || value === undefined ? '' : value)
+        .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// A type the provider did not report has severityLevel null — it must be
+// excluded from aggregates rather than counted as a reassuring zero.
+function reportedLevels(pollenArray) {
+    return (pollenArray || [])
+        .map(p => p.severityLevel)
+        .filter(level => Number.isFinite(level));
+}
+
+// Tracks which source produced the numbers on screen, so the scale guide
+// always describes the scale actually being shown.
+let currentPollenMeta = { source: null, measured: false };
+
+const SEVERITY_SWATCHES = [
+    ['var(--color-safe)', 'Low'],
+    ['var(--color-moderate)', 'Moderate'],
+    ['var(--color-caution)', 'High'],
+    ['var(--color-danger)', 'Very High'],
+];
+
 window.__showPollenInfo = function () {
+    const source = currentPollenMeta.source || 'the current provider';
+
+    if (currentPollenMeta.measured) {
+        // NC DEQ publishes real grain counts, and its severity bands differ per
+        // pollen type, so there is no single numeric scale to print here.
+        showInfoModal('Pollen Count Guide', `
+            <p>These are <strong>measured</strong> counts from ${source}: actual pollen grains
+            counted in a 24-hour air sample, reported in grains per cubic metre.</p>
+            <p>Severity bands are set by ${source} and differ for each pollen type — for example,
+            a count that is MODERATE for trees would be HIGH for weeds.</p>
+            <div class="info-scale">
+                ${SEVERITY_SWATCHES.map(([color, label]) => `
+                    <div class="info-scale-item">
+                        <div class="info-scale-dot" style="background: ${color}"></div>
+                        <span class="info-scale-label">${label}</span>
+                    </div>
+                `).join('')}
+            </div>
+            <p><strong>Trees</strong> — pollen from trees like oak, cedar, birch and pine.</p>
+            <p><strong>Grasses</strong> — pollen from lawn and field grasses.</p>
+            <p><strong>Weeds</strong> — pollen from ragweed, nettle, sagebrush and similar.</p>
+        `);
+        return;
+    }
+
     showInfoModal('Pollen Index Guide', `
-        <p>The pollen index measures airborne pollen concentration on a 0–12 scale from pollen.com.</p>
+        <p>These are <strong>forecast</strong> values from ${source}, given as the
+        Universal Pollen Index (UPI) — a 0–5 scale, not a grain count.</p>
         <div class="info-scale">
             <div class="info-scale-item">
                 <div class="info-scale-dot" style="background: var(--color-safe)"></div>
-                <span class="info-scale-label">Low</span>
-                <span class="info-scale-range">0 – 2.4</span>
+                <span class="info-scale-label">None / Very Low / Low</span>
+                <span class="info-scale-range">0 – 2</span>
             </div>
             <div class="info-scale-item">
                 <div class="info-scale-dot" style="background: var(--color-moderate)"></div>
                 <span class="info-scale-label">Moderate</span>
-                <span class="info-scale-range">2.5 – 7.2</span>
+                <span class="info-scale-range">3</span>
             </div>
             <div class="info-scale-item">
                 <div class="info-scale-dot" style="background: var(--color-caution)"></div>
                 <span class="info-scale-label">High</span>
-                <span class="info-scale-range">7.3 – 9.6</span>
+                <span class="info-scale-range">4</span>
             </div>
             <div class="info-scale-item">
                 <div class="info-scale-dot" style="background: var(--color-danger)"></div>
                 <span class="info-scale-label">Very High</span>
-                <span class="info-scale-range">9.7 – 12.0</span>
+                <span class="info-scale-range">5</span>
             </div>
         </div>
-        <p><strong>Trees</strong> — pollen from trees like oak, cedar, birch, pine, etc.</p>
+        <p><strong>Trees</strong> — pollen from trees like oak, cedar, birch and pine.</p>
         <p><strong>Grasses</strong> — pollen from lawn and field grasses.</p>
-        <p><strong>Weeds</strong> — pollen from ragweed, nettle, sagebrush, etc.</p>
+        <p><strong>Weeds</strong> — pollen from ragweed, nettle, sagebrush and similar.</p>
     `);
 };
 
@@ -161,7 +212,8 @@ window.__showTermsOfService = function () {
 // --- Breathable Score ---
 
 function computeBreathableScore(pollenData, aqiData) {
-    const maxSeverity = Math.max(...pollenData.pollen.map(p => p.severityLevel));
+    const levels = reportedLevels(pollenData.pollen);
+    const maxSeverity = levels.length > 0 ? Math.max(...levels) : 0;
 
     // Pollen penalty based on max severity
     const pollenPenalty = { 1: 0.5, 2: 1.5, 3: 3, 4: 4.5 }[maxSeverity] || 0;
@@ -182,9 +234,6 @@ function computeBreathableScore(pollenData, aqiData) {
 
 function generateBreathableInsights(score, pollenData, aqiData) {
     const insights = [];
-    const currentCityName = localStorage.getItem('aqi_selected_city_name') || 'Raleigh';
-    const fallbackAllergens = getCityAllergens(currentCityName);
-
     // Score summary
     const desc = score >= 8 ? 'good conditions for being outdoors'
         : score >= 6 ? 'mixed conditions that may vary through the day'
@@ -193,25 +242,16 @@ function generateBreathableInsights(score, pollenData, aqiData) {
     insights.push(`Score is <strong>${score}/10</strong> today (higher means better breathing conditions), suggesting ${desc}.`);
 
     // Main pollen concerns
-    const trees = pollenData.pollen.find(p => p.type === 'Trees');
-    const grasses = pollenData.pollen.find(p => p.type === 'Grasses');
-    const weeds = pollenData.pollen.find(p => p.type === 'Weeds');
-
     const highTypes = pollenData.pollen.filter(p => p.severityLevel >= 3);
     if (highTypes.length > 0) {
         const mainConcern = highTypes.sort((a, b) => b.severityLevel - a.severityLevel)[0];
-        let speciesNames = mainConcern.details?.filter(s => s) || [];
-        // Fall back to common allergens if API didn't return species
-        if (speciesNames.length === 0) {
-            if (mainConcern.type === 'Trees') speciesNames = fallbackAllergens.trees;
-            else if (mainConcern.type === 'Weeds') speciesNames = fallbackAllergens.weeds;
-        }
-        const species = speciesNames.slice(0, 2).join(' and ');
-        insights.push(`${mainConcern.type} pollen is the main concern today${species ? ', led by <strong>' + species + '</strong>' : ''}.`);
+        const speciesNames = (mainConcern.details || []).filter(Boolean);
+        const species = speciesNames.slice(0, 2).map(esc).join(' and ');
+        insights.push(`${esc(mainConcern.type)} pollen is the main concern today${species ? ', led by <strong>' + species + '</strong>' : ''}.`);
     }
 
     // Low pollen types
-    const lowTypes = pollenData.pollen.filter(p => p.severityLevel <= 1);
+    const lowTypes = pollenData.pollen.filter(p => p.severityLevel === 1);
     if (lowTypes.length > 0) {
         const names = lowTypes.map(p => p.type.toLowerCase());
         const joined = names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
@@ -268,10 +308,11 @@ function renderPoweredBy(pollenData) {
     const container = document.getElementById('powered-by');
     // Determine active data sources
     const sources = [];
-    if (pollenData?.city) {
-        sources.push({ name: 'Pollen.com', desc: 'Pollen Forecasts' });
-    } else {
-        sources.push({ name: 'NC DEQ', desc: 'Pollen Monitoring' });
+    if (pollenData?.source) {
+        sources.push({
+            name: pollenData.source,
+            desc: pollenData.measured ? 'Measured pollen counts' : 'Pollen forecast',
+        });
     }
     sources.push({ name: 'Open-Meteo', desc: 'Air Quality' });
 
@@ -285,8 +326,13 @@ function renderPoweredBy(pollenData) {
 
 function renderHealthGuidance(pollenData) {
     const container = document.getElementById('health-guidance-section');
-    const maxSeverity = Math.max(...pollenData.pollen.map(p => p.severityLevel));
-    const mainType = pollenData.pollen.reduce((a, b) => a.severityLevel >= b.severityLevel ? a : b);
+    const reported = pollenData.pollen.filter(p => Number.isFinite(p.severityLevel));
+    if (reported.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    const maxSeverity = Math.max(...reported.map(p => p.severityLevel));
+    const mainType = reported.reduce((a, b) => (a.severityLevel >= b.severityLevel ? a : b), reported[0]);
     const typeName = mainType.type.toLowerCase();
 
     // Dynamic advice based on severity
@@ -429,10 +475,14 @@ function renderApp(pollenData, isRefreshing = false) {
     const lastUpdatedEl = document.getElementById('last-updated');
 
     // Set Header Data
-    reportDateEl.textContent = `Report Period: ${pollenData.period}`;
+    currentPollenMeta = { source: pollenData.source, measured: !!pollenData.measured };
+    const kind = pollenData.measured ? 'Measured' : 'Forecast';
+    reportDateEl.textContent = `${kind} · ${pollenData.period}`;
+    // "Fetched", not "Updated" — this is when we read the provider, which can
+    // be hours after the report it describes was produced.
     lastUpdatedEl.innerHTML = `
         ${isRefreshing ? '<span class="refresh-spinner">Refreshing...</span> ' : ''}
-        App Last Updated: ${pollenData.lastUpdated}
+        ${pollenData.reportDate ? `Report date: ${esc(pollenData.reportDate)} &middot; ` : ''}Fetched: ${esc(formatTimestamp(pollenData.lastUpdated))}
     `;
 
     // Danger Zone Badge
@@ -443,62 +493,37 @@ function renderApp(pollenData, isRefreshing = false) {
         </div>
     `;
 
-    // Get fallback allergens for current city
-    const currentCityName = localStorage.getItem('aqi_selected_city_name') || 'Raleigh';
-    const fallbackAllergens = getCityAllergens(currentCityName);
-
     // Render Pollen Cards with species details
     pollenContainer.innerHTML = pollenData.pollen.map(p => {
-        const percentage = Math.min((p.severityLevel / 4) * 100, 100);
-        let barColor = 'var(--color-safe)';
+        // available === false means the provider reported nothing for this
+        // type. Show that plainly instead of an authoritative-looking zero.
+        const reported = p.available !== false && Number.isFinite(p.severityLevel);
+        const percentage = reported ? Math.min((p.severityLevel / 4) * 100, 100) : 0;
+        let barColor = reported ? 'var(--color-safe)' : 'var(--color-muted, #64748b)';
         if (p.severityLevel === 2) barColor = 'var(--color-moderate)';
         if (p.severityLevel === 3) barColor = 'var(--color-caution)';
         if (p.severityLevel === 4) barColor = 'var(--color-danger)';
 
-        // Species details section
-        let speciesHTML = '';
-        if (p.type === 'Trees') {
-            const treeDetails = (p.details && p.details.length > 0) ? p.details : fallbackAllergens.trees;
-            speciesHTML = `
+        // Species — shown only when the provider actually reported them.
+        const species = (p.details || []).filter(Boolean);
+        const speciesLabel = p.type === 'Grasses' ? 'Grass' : p.type.replace(/s$/, '');
+        const speciesHTML = species.length > 0 ? `
                 <div class="species-section">
-                    <div class="species-title">Top Tree Allergens</div>
+                    <div class="species-title">Reported ${speciesLabel} Allergens</div>
                     <div class="species-tags">
-                        ${treeDetails.map(name => `<span class="species-tag" style="border-color: ${barColor}40; color: ${barColor}">${name}</span>`).join('')}
+                        ${species.map(name => `<span class="species-tag" style="border-color: ${barColor}40; color: ${barColor}">${esc(name)}</span>`).join('')}
                     </div>
                 </div>
-            `;
-        } else if (p.type === 'Weeds') {
-            const weedDetails = (p.details && p.details.length > 0) ? p.details : fallbackAllergens.weeds;
-            if (p.severityLevel >= 2 || (p.details && p.details.length > 0)) {
-                speciesHTML = `
-                    <div class="species-section">
-                        <div class="species-title">Top Weed Allergens</div>
-                        <div class="species-tags">
-                            ${weedDetails.map(name => `<span class="species-tag" style="border-color: ${barColor}40; color: ${barColor}">${name}</span>`).join('')}
-                        </div>
-                    </div>
-                `;
-            } else {
-                speciesHTML = `
-                    <div class="species-section">
-                        <div class="species-title">Top Weed Allergens</div>
-                        <div class="species-tags">
-                            ${weedDetails.map(name => `<span class="species-tag" style="border-color: ${barColor}40; color: ${barColor}">${name}</span>`).join('')}
-                        </div>
-                        <p class="species-note">Currently low — these are common area allergens to watch.</p>
-                    </div>
-                `;
-            }
-        }
+            ` : '';
 
         return `
             <div class="glass-panel pollen-card ${isRefreshing ? 'updating' : ''}">
                 <button class="info-btn" onclick="window.__showPollenInfo()" title="What does this mean?">i</button>
-                <div class="pollen-type">${p.type}</div>
+                <div class="pollen-type">${esc(p.type)}</div>
                 <div class="pollen-value">
-                    ${p.count} <span class="pollen-unit">${p.unit}</span>
+                    ${reported ? `${esc(p.count)} <span class="pollen-unit">${esc(p.unit)}</span>` : '<span class="pollen-unit">No data reported</span>'}
                 </div>
-                <div class="severity-label" style="color: ${barColor}">${p.severity}</div>
+                <div class="severity-label" style="color: ${barColor}">${reported ? esc(p.severity) : '&mdash;'}</div>
                 <div class="severity-indicator">
                     <div class="severity-progress" style="width: ${percentage}%; background-color: ${barColor}"></div>
                 </div>
@@ -512,9 +537,10 @@ function renderApp(pollenData, isRefreshing = false) {
 }
 
 function showError(container, message) {
+    const safeMessage = esc(message);
     container.innerHTML = `
         <div class="glass-panel" style="grid-column: 1/-1; text-align: center; border-color: var(--color-danger); color: var(--color-danger);">
-            <p>${message}</p>
+            <p>${safeMessage}</p>
             <button onclick="window.__retryLoad()" style="
                 margin-top: 1rem; padding: 0.6rem 1.5rem; border: 1px solid var(--color-danger);
                 background: rgba(239,68,68,0.15); color: var(--color-danger); border-radius: 12px;
@@ -524,16 +550,15 @@ function showError(container, message) {
     `;
 }
 
-/**
- * Get the best available data: fresh > cached > fallback
- */
-async function loadPollenData() {
-    try {
-        return await fetchPollenData();
-    } catch (fetchError) {
-        console.warn('Live fetch failed, using hardcoded fallback:', fetchError);
-        return { ...fallbackData, lastUpdated: new Date().toLocaleString() };
-    }
+function formatTimestamp(value) {
+    if (!value) return 'unknown';
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+}
+
+function getSelectedCity() {
+    const savedName = localStorage.getItem('aqi_selected_city_name');
+    return CITIES.find(c => c.name === savedName) || CITIES[0];
 }
 
 async function initApp() {
@@ -547,8 +572,7 @@ window.__retryLoad = async function () {
     const pollenContainer = document.getElementById('pollen-container');
     pollenContainer.innerHTML = '<div class="glass-panel" style="grid-column: 1/-1; text-align: center;">Retrying...</div>';
 
-    const data = await loadPollenData();
-    renderApp(data, false);
+    await loadCityData(getSelectedCity());
 };
 
 // Auto-refresh when user returns to the tab
@@ -629,10 +653,29 @@ function renderAQI(data) {
     `;
 }
 
+// Guards against a slow response for a previously selected city landing after
+// a faster one and overwriting the city the user is actually looking at.
+let activeRequestId = 0;
+
+function clearPollenSections() {
+    ['report-date', 'last-updated', 'danger-badge-container', 'powered-by',
+     'breathable-score-section', 'health-guidance-section'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+    currentPollenMeta = { source: null, measured: false };
+}
+
 async function loadCityData(city) {
+    const requestId = ++activeRequestId;
+    const isCurrent = () => requestId === activeRequestId;
+
     const aqiContainer = document.getElementById('aqi-container');
     const pollenContainer = document.getElementById('pollen-container');
 
+    // Clear the previous city entirely — never leave its badge, period or
+    // source label sitting above another city's data.
+    clearPollenSections();
     aqiContainer.innerHTML = '<div class="glass-panel" style="text-align: center; padding: 2rem;">Loading air quality data...</div>';
     pollenContainer.innerHTML = '<div class="glass-panel" style="grid-column: 1/-1; text-align: center;">Loading pollen data...</div>';
 
@@ -641,9 +684,11 @@ async function loadCityData(city) {
 
     // Fetch AQI and pollen in parallel
     const aqiPromise = fetchAQI(city).then(data => {
+        if (!isCurrent()) return;
         aqiResult = data;
         renderAQI(data);
     }).catch(error => {
+        if (!isCurrent()) return;
         console.error('AQI fetch failed:', error);
         aqiContainer.innerHTML = `
             <div class="glass-panel" style="text-align: center; color: var(--color-danger);">
@@ -653,19 +698,23 @@ async function loadCityData(city) {
     });
 
     const pollenPromise = fetchCityPollen(city).then(data => {
+        if (!isCurrent()) return;
         pollenResult = data;
         renderApp(data, false);
-    }).catch(async (error) => {
-        console.warn('City pollen fetch failed, trying NC DEQ fallback:', error);
-        // Fall back to NC DEQ data
-        const data = await loadPollenData();
-        pollenResult = data;
-        renderApp(data, false);
+    }).catch((error) => {
+        if (!isCurrent()) return;
+        console.error('Pollen fetch failed:', error);
+        pollenResult = null;
+        clearPollenSections();
+        showError(
+            pollenContainer,
+            `Unable to load pollen data for ${city.name}. ${error.message}`
+        );
     });
 
     await Promise.allSettled([aqiPromise, pollenPromise]);
+    if (!isCurrent()) return;
 
-    // Render sections that depend on both datasets
     if (pollenResult) {
         renderBreathableScore(pollenResult, aqiResult);
         renderHealthGuidance(pollenResult);

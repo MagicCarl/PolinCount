@@ -1,0 +1,22 @@
+[
+  { "name": "Boise", "state": "ID", "lat": 43.615, "lon": -116.2023 },
+  { "name": "Charleston", "state": "SC", "lat": 32.7765, "lon": -79.9311 },
+  { "name": "Dallas", "state": "TX", "lat": 32.7767, "lon": -96.797 },
+  { "name": "Detroit", "state": "MI", "lat": 42.3314, "lon": -83.0458 },
+  { "name": "Greenville", "state": "SC", "lat": 34.8526, "lon": -82.394 },
+  { "name": "Indianapolis", "state": "IN", "lat": 39.7684, "lon": -86.1581 },
+  { "name": "Kihei", "state": "HI", "lat": 20.7644, "lon": -156.445 },
+  { "name": "Los Angeles", "state": "CA", "lat": 34.0522, "lon": -118.2437 },
+  { "name": "New Orleans", "state": "LA", "lat": 29.9511, "lon": -90.0715 },
+  { "name": "New York", "state": "NY", "lat": 40.7128, "lon": -74.006 },
+  { "name": "Oklahoma City", "state": "OK", "lat": 35.4676, "lon": -97.5164 },
+  { "name": "Orlando", "state": "FL", "lat": 28.5383, "lon": -81.3792 },
+  { "name": "Philadelphia", "state": "PA", "lat": 39.9526, "lon": -75.1652 },
+  { "name": "Raleigh", "state": "NC", "lat": 35.7796, "lon": -78.6382, "preferNcDeq": true },
+  { "name": "Richmond", "state": "VA", "lat": 37.5407, "lon": -77.436 },
+  { "name": "San Diego", "state": "CA", "lat": 32.7157, "lon": -117.1611 },
+  { "name": "San Francisco", "state": "CA", "lat": 37.7749, "lon": -122.4194 },
+  { "name": "Tulsa", "state": "OK", "lat": 36.154, "lon": -95.9928 },
+  { "name": "Wichita", "state": "KS", "lat": 37.6872, "lon": -97.3301 },
+  { "name": "Wilmington", "state": "DE", "lat": 39.7391, "lon": -75.5398 }
+]
